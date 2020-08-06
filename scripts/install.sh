@@ -1,23 +1,23 @@
 #!/bin/bash
 DIR=`dirname $0`
 echo -e "INSTALL\t: Testing requires Github authentication."
+DEFAULT_OWNER=`git config --list | grep remote.origin.url | sed -re "s/.*github.com.([^\/]*).*/\1/"`
+echo -e "INSTALL\t: Enter Github account owner ($DEFAULT_OWNER):"
+read -p "OWNER ($DEFAULT_OWNER)? " OWNER
+if [ "$OWNER" == "" ]; then 
+  OWNER=$DEFAULT_OWNER
+fi
 echo -e "INSTALL\t: Enter Github personal access token and press ENTER:"
 read -p "TOKEN? " TOKEN
 if [ "$TOKEN" == "" ]; then 
   echo -e "INSTALL\t: A personal access token is required (FAIL)"
   exit
 fi
-echo -e 'INSTALL\t: Enter Github account owner:'
-read -p "OWNER? " OWNER
-if [ "$OWNER" == "" ]; then 
-  echo -e "INSTALL\t: A Github user name is required (FAIL)"
-  exit
-fi
-echo -e 'INSTALL\t: Enter Github repository:'
-read -p "REPO? " REPO
+DEFAULT_REPO=okitty
+echo -e "INSTALL\t: Enter Github repository ($DEFAULT_REPO):"
+read -p "REPO ($DEFAULT_REPO)? " REPO
 if [ "$REPO" == "" ]; then 
-  echo -e "INSTALL\t: A Github repository name is required (FAIL)"
-  exit
+  REPO=$DEFAULT_REPO
 fi
 
 CONFIG=$DIR/../local/test-config.json

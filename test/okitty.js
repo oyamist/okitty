@@ -117,7 +117,15 @@
             var headTree = await okitty.getHeadTree();
             should(headTree).properties([ "sha", "url", "tree", ]);
             should.deepEqual(headTree.tree.map(t=>t.path), [
-                "LICENSE", "README.md", 
+                ".gitignore",
+                "LICENSE", 
+                "README.md", 
+                "index.js",
+                "package-lock.json",
+                "package.json",
+                "scripts",
+                "src",
+                "test",
             ]);
             done();
         } catch (e) { done(e); } })(); 

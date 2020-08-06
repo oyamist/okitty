@@ -21,7 +21,8 @@ npm install --save okitty
 ```
 
 ### Installation (Developer)
-Fork `oyamist/okitty` under your own Github user account
+Fork `oyamist/okitty` under your own Github user account.
+Then clone your fork to your computer for development:
 
 ```
 git clone https://github.com/MYUSER/okitty

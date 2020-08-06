@@ -12,9 +12,17 @@
     const JSON5 = require('json5');
     const LOCALDIR = path.join(__dirname, '..', 'local');
     const CONFIGPATH = path.join(LOCALDIR, 'test-config.json');
-    const GARDEN = "https://api.github.com/repos/oyamist/oya-tag-garden";
-    const BLOBS = `${GARDEN}/git/blobs`;
-    const TREES = `${GARDEN}/git/trees`;
+    var {
+        token: auth,
+        owner,
+        repo,
+    } = fs.existsSync(CONFIGPATH)
+        ? JSON.parse(fs.readFileSync(CONFIGPATH))
+        : {};
+
+    const APIPATH = `https://api.github.com/repos/${owner}/${repo}`;
+    const BLOBS = `${APIPATH}/git/blobs`;
+    const TREES = `${APIPATH}/git/trees`;
 
     const AUTHOR = date => ({
         "name": "Karl Lew",
@@ -41,44 +49,34 @@
     const BLOB_HELLO = "95d09f2b10159347eece71399a7e2e907ea3df4f";
     const TEXT_HELLO = "hello world";
 
-    const COMMIT_FIRST = "ef9381c6d777d273b5c00055539179811be903df";
-    const TREE_FIRST = "b260dd3f61d604bc0e8ce0a89d74d6e128877649";
-    const MESSAGE_FIRST = "first commit";
+    const COMMIT_FIRST = "bdfd559ae91a75fc69c5a580f4da24069ff931e6";
+    const TREE_FIRST = "56f0af3e3b1f281019ce997a4c7482c6d753c157";
+    const MESSAGE_FIRST = "Initial commit";
     const PARENTS_FIRST = [];
-    const DATE_FIRST = "2020-08-02T10:47:22Z";
-    const AUTHOR_FIRST = AUTHOR(DATE_FIRST);
-    const BLOB_README = "c08a4dd9c66b74c1c25b58e91a296f9845475746";
+    const BLOB_README = "96476f9356795dfa1f0fe3a84868bd960ab1ff7c";
+    const BLOB_LICENSE = "b35e0b003161eed2cfa0f03652fcb7a652bed20f";
 
     this.timeout(10*1000);
 
-    var {
-        token: auth,
-        owner,
-        repo,
-    } = fs.existsSync(CONFIGPATH)
-        ? JSON.parse(fs.readFileSync(CONFIGPATH))
-        : {};
-    function warnAuth(test) {
-        console.log([
-            ``,
-            `NOTE: ${test} test will fail without a Github`,
-            `Personal Access Token for oyamist:`,
-            `     ${CONFIGPATH}`,
-        ].join('\n'));
-    }
+    var okittyDefault = new Okitty({auth});
 
-    it("TESTTESTdefault ctor", ()=>{
-        var okitty = new Okitty();
+    it("default ctor", ()=>{
+        var okitty = okittyDefault;
+        should(okitty.hasOwnProperty("auth")).equal(false);
         should(okitty).properties({
-            owner: "oyamist",
+            owner: undefined,
             repo: "okitty",
-            path: "test/test.json",
             branch: "master",
             indent: 2,
+            stats: {
+                octokitCalls: 0,
+            },
         });
-        should(okitty.hasOwnProperty("auth")).equal(false);
+
+        // Okitty uses octokit
+        should(okitty.octokit).instanceOf(Octokit);
     });
-    it("TESTTESTcustom ctor", ()=>{
+    it("custom ctor", ()=>{
         var owner = "test-owner";
         var repo = "test-repo";
         var branch = "test-branch";
@@ -97,9 +95,12 @@
             repo,
             branch,
             indent,
+            stats: {
+                octokitCalls: 0,
+            },
         });
     });
-    it("TESTTESTgetHeadCommit() => git head commit",done=>{
+    it("getHeadCommit() => git head commit",done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
             var headCommit = await okitty.getHeadCommit();
@@ -108,12 +109,13 @@
                 "author", "committer", "tree", "message",
                 "parents", "verification",
             ].sort());
+            should(okitty.stats.octokitCalls).equal(2);
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTgetHeadTree(...) => git head tree",done=>{
+    it("getHeadTree(...) => git head tree",done=>{
         (async function() { try {
-            var okitty = new Okitty({auth});
+            var okitty = new Okitty({owner, repo, auth});
             var headTree = await okitty.getHeadTree();
             should(headTree).properties([ "sha", "url", "tree", ]);
             should.deepEqual(headTree.tree.map(t=>t.path), [
@@ -127,81 +129,160 @@
                 "src",
                 "test",
             ]);
+            should(okitty.stats.octokitCalls).equal(2);
             done();
         } catch (e) { done(e); } })(); 
     });
     it("getCommit(sha) => git commit", done=>{
         (async function() { try {
+            var commitProps = {
+                sha: COMMIT_FIRST,
+                message: MESSAGE_FIRST,
+                parents: PARENTS_FIRST,
+            };
+            var committer = {
+                name: 'GitHub',
+                email: 'noreply@github.com',
+                date: '2020-08-06T11:33:12Z',
+            };
+            var commit_sha = COMMIT_FIRST;
+            
+            // Okitty extension takes a commit sha
+            var okitty = new Okitty({owner, repo, auth});
+            var commit = await okitty.getCommit(COMMIT_FIRST);
+            should(commit).properties(commitProps);
+            should(commit.author).properties(["name", "email", "date"]);
+            should.deepEqual(commit.committer, committer);
+            should(commit.tree).properties({ sha: TREE_FIRST, });
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // Okitty supports Octokit standard options object
             var okitty = new Okitty({auth});
-            var commit = await okitty.getCommit(COMMIT_HELLO);
-            should(commit).properties({
-                sha: COMMIT_HELLO,
-                message: 'hello',
-            });
-            should(commit.tree).properties({
-                sha: TREE_HELLO,
-            });
+            var commit = await okitty.getCommit({owner, repo, commit_sha});
+            should(commit).properties(commitProps);
+            should(commit.author).properties(["name", "email", "date"]);
+            should.deepEqual(commit.committer, committer);
+            should(commit.tree).properties({ sha: TREE_FIRST, });
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // getCommit is cached
+            var commit = await okitty.getCommit({owner, repo, commit_sha});
+            should(commit).properties(commitProps);
+            should(commit.author).properties(["name", "email", "date"]);
+            should.deepEqual(commit.committer, committer);
+            should(commit.tree).properties({ sha: TREE_FIRST, });
+            should(okitty.stats.octokitCalls).equal(1);
+
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("createBlob(data) => git blob", done=>{
+    it("createBlob(content) => git blob", done=>{
         (async function() { try {
-            var okitty = new Okitty({auth});
-
+            var okitty = new Okitty({owner, repo, auth});
             var content = "hello world";
-            warnAuth('createBlob');
-            var blob = await okitty.createBlob(content);
-            should(blob).properties([
-                "sha", "type", "content", "encoding",
-            ]);
-            should(blob).properties({
-                sha: BLOB_HELLO,
-                type: "blob",
+            var encoding = "utf-8";
+            var url = [
+                "https://api.github.com/repos",
+                owner,
+                repo,
+                "git/blobs",
+                BLOB_HELLO,
+            ].join("/");
+            var res = await okitty.createBlob(content);
+            should.deepEqual(res, { sha: BLOB_HELLO, url, });
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // createBlob is cached
+            var res = await okitty.createBlob(content);
+            should.deepEqual(res, { sha: BLOB_HELLO, url, });
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // Okitty supports standard Octokit option object
+            var res = await okitty.createBlob({
+                owner,
+                repo,
                 content,
-                encoding: "utf-8",
+                encoding,
             });
+            should.deepEqual(res, { sha: BLOB_HELLO, url, });
+            should(okitty.stats.octokitCalls).equal(1);
                 
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("getPathTree(path) => [git trees]", done=>{
-        (async function() { try {
-            var okitty = new Okitty({auth});
-            var pathTree = await okitty.getPathTree("oyatag/hello.txt");
-            should(pathTree.length).equal(3);
-            should.deepEqual(pathTree[0].tree.map(t=>t.path), [
-                "README.md", "oyatag",
-            ]);
-            should.deepEqual(pathTree[1].tree.map(t=>t.path), [
-                "hello.txt",
-            ]);
-            should(pathTree[2].content).match(/hello world/);
-            done();
-        } catch (e) { done(e); } })(); 
-    });
-    it("getTree", done=>{
+    it("TESTTESTgetTree", done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var tree = await okitty.getTree(TREE_HELLO);
-            var {
-                files,
-            } = tree;
-            //console.log(`dbg getTree`, tree);
-            should(tree.tree[0]).properties({
+            var licenseEntry = {
+                path: 'LICENSE',
+                mode: '100644',
+                type: 'blob',
+                sha: BLOB_LICENSE,
+                size: 1076,
+                url: `${BLOBS}/${BLOB_LICENSE}`,
+            };
+            var readmeEntry = {
                 path: 'README.md',
                 mode: '100644',
                 type: 'blob',
                 sha: BLOB_README,
-                size: 17,
+                size: 42,
                 url: `${BLOBS}/${BLOB_README}`,
+            };
+            var resProps = {
+                sha: TREE_FIRST,
+                url: `${TREES}/${TREE_FIRST}`,
+            };
+
+            // Okitty extension takes tree SHA
+            var res = await okitty.getTree(TREE_FIRST);
+            should(res).properties(resProps);
+            var iTree = 0;
+            should(res.tree[iTree++]).properties(licenseEntry);
+            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree.length).equal(iTree);
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // getTree is cached
+            var res = await okitty.getTree(TREE_FIRST);
+            should(res).properties(resProps);
+            var iTree = 0;
+            should(res.tree[iTree++]).properties(licenseEntry);
+            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree.length).equal(iTree);
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // Okitty supports Octokit options
+            var res = await okitty.getTree({
+                owner,
+                repo,
+                tree_sha: TREE_FIRST,
             });
-            should(tree.tree[1]).properties({
-                path: 'test',
-                mode: '040000',
-                type: 'tree',
-                sha: TREE_BLOB_HELLO,
-                url: `${TREES}/${TREE_BLOB_HELLO}`,
-            });
+            should(res).properties(resProps);
+            var iTree = 0;
+            should(res.tree[iTree++]).properties(licenseEntry);
+            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree.length).equal(iTree);
+            should(okitty.stats.octokitCalls).equal(1);
+
+            done();
+        } catch (e) { done(e); } })(); 
+    });
+    it("TESTTESTgetPathTree(path) => [git trees]", done=>{
+        done(); return; // TODO
+        (async function() { try {
+            var okitty = new Okitty({owner, repo, auth});
+            var pathTree = await okitty.getPathTree("src/okitty.js");
+            should(pathTree.length).equal(3);
+            should.deepEqual(pathTree[0].tree.map(t=>t.path), [
+                ".gitignore", "LICENSE", "README.md", "index.js",
+                "package-lock.json", "package.json", "scripts",
+                "src", "test",
+            ]);
+            should.deepEqual(pathTree[1].tree.map(t=>t.path), [
+                "okitty.js",
+            ]);
+            should(pathTree[2].content).match(/hello world/);
             done();
         } catch (e) { done(e); } })(); 
     });
@@ -227,14 +308,14 @@
                 type: 'blob',
                 sha: BLOB_README,
                 size: 17,
-                url: `${GARDEN}/git/blobs/${BLOB_README}`,
+                url: `${APIPATH}/git/blobs/${BLOB_README}`,
             });
             should.deepEqual(res.tree[1], { 
                 path: 'oyatag',
                 mode: '040000',
                 type: 'tree', // default tree mode
                 sha: TREE_BLOB_HELLO,
-                url: `${GARDEN}/git/trees/${TREE_BLOB_HELLO}`,
+                url: `${APIPATH}/git/trees/${TREE_BLOB_HELLO}`,
             });
                                                      
             done();

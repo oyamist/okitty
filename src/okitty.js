@@ -316,6 +316,24 @@
 
         }
 
+        readFile(path) {
+            var that = this;
+            var {
+                octokit,
+                owner,
+                repo,
+            } = that;
+            if (!path) {
+                return Promise.reject(new Error("path is required"));
+            }
+            var pbody = (resolve, reject) => (async function() { try {
+                var pathObjs = await that.getPathObjects(path);
+                var lastObj = pathObjs.pop();
+                resolve(lastObj);
+            } catch(e) { reject(e);} })();
+            return new Promise(pbody);
+        }
+
         writeFile(data, path) {
             var that = this;
             var {

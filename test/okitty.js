@@ -340,6 +340,22 @@
             done();
         } catch (e) { done(e); } })(); 
     });
+    it("TESTTESTreadFile(path) => blob or tree object", done=>{
+        (async function() { try {
+            var okitty = new Okitty({ owner, repo, auth });
+            var res = await okitty.readFile('test/hello.txt');
+            should(res).properties({
+                content: TEXT_HELLO,
+                size: TEXT_HELLO.length,
+                sha: BLOB_HELLO,
+                url: `${BLOBS}/${BLOB_HELLO}`,
+                encoding: `utf-8`,
+            });
+            should(res).properties(['node_id']);
+            should(okitty.stats.octokitCalls).equal(5);
+            done();
+        } catch (e) { done(e); } })(); 
+    });
 
     // TODO 
     it("updateRef", done=>{

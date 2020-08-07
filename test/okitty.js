@@ -19,7 +19,6 @@
     } = fs.existsSync(CONFIGPATH)
         ? JSON.parse(fs.readFileSync(CONFIGPATH))
         : {};
-
     const APIPATH = `https://api.github.com/repos/${owner}/${repo}`;
     const BLOBS = `${APIPATH}/git/blobs`;
     const TREES = `${APIPATH}/git/trees`;
@@ -36,18 +35,9 @@
     const AUTHOR_OYATAG_HELLO = AUTHOR(DATE_OYATAG_HELLO);
 
     const COMMIT_TEST_HELLO = "a238d38570238ebdc1ad1b97edcc83d147875978";
-    const TREE_TEST_HELLO = "f4eaf8fdbf3adb94a85e05a5851b0c09236b07ec";
-    const DATE_TEST_HELLO = "2020-08-02T16:08:22Z";
-    const AUTHOR_TEST_HELLO = AUTHOR(DATE_TEST_HELLO);
 
-    const COMMIT_HELLO = "cb3c6d44aa99620835ef17fc77710142507252ec";
-    const TREE_HELLO = "e87b8a34cd6a967febe71a57ddacd855b9c78108";
-    const TREE_BLOB_HELLO = "68aba62e560c0ebc3396e8ae9335232cd93a3f60";
-    const DATE_HELLO = "2020-08-02T12:12:52Z";
-    const AUTHOR_HELLO = AUTHOR(DATE_HELLO);
-    const MESSAGE_HELLO = "hello";
-    const BLOB_HELLO = "95d09f2b10159347eece71399a7e2e907ea3df4f";
-    const TEXT_HELLO = "hello world";
+    const BLOB_HELLO = "3b18e512dba79e4c8300dd08aeb37f8e728b8dad";
+    const TEXT_HELLO = "hello world\n";
 
     const COMMIT_FIRST = "bdfd559ae91a75fc69c5a580f4da24069ff931e6";
     const TREE_FIRST = "56f0af3e3b1f281019ce997a4c7482c6d753c157";
@@ -55,6 +45,23 @@
     const PARENTS_FIRST = [];
     const BLOB_README = "96476f9356795dfa1f0fe3a84868bd960ab1ff7c";
     const BLOB_LICENSE = "b35e0b003161eed2cfa0f03652fcb7a652bed20f";
+    const LICENSE_ENTRY = {
+        path: 'LICENSE',
+        mode: '100644',
+        type: 'blob',
+        sha: BLOB_LICENSE,
+        size: 1076,
+        url: `${BLOBS}/${BLOB_LICENSE}`,
+    };
+    const README_ENTRY = {
+        path: 'README.md',
+        mode: '100644',
+        type: 'blob',
+        sha: BLOB_README,
+        size: 42,
+        url: `${BLOBS}/${BLOB_README}`,
+    };
+
 
     this.timeout(10*1000);
 
@@ -129,7 +136,7 @@
                 "src",
                 "test",
             ]);
-            should(okitty.stats.octokitCalls).equal(2);
+            should(okitty.stats.octokitCalls).equal(3);
             done();
         } catch (e) { done(e); } })(); 
     });
@@ -176,10 +183,10 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("createBlob(content) => git blob", done=>{
+    it("TESTTESTcreateBlob(content) => git blob", done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var content = "hello world";
+            var content = TEXT_HELLO;
             var encoding = "utf-8";
             var url = [
                 "https://api.github.com/repos",
@@ -210,25 +217,9 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTgetTree", done=>{
+    it("getTree", done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var licenseEntry = {
-                path: 'LICENSE',
-                mode: '100644',
-                type: 'blob',
-                sha: BLOB_LICENSE,
-                size: 1076,
-                url: `${BLOBS}/${BLOB_LICENSE}`,
-            };
-            var readmeEntry = {
-                path: 'README.md',
-                mode: '100644',
-                type: 'blob',
-                sha: BLOB_README,
-                size: 42,
-                url: `${BLOBS}/${BLOB_README}`,
-            };
             var resProps = {
                 sha: TREE_FIRST,
                 url: `${TREES}/${TREE_FIRST}`,
@@ -238,8 +229,8 @@
             var res = await okitty.getTree(TREE_FIRST);
             should(res).properties(resProps);
             var iTree = 0;
-            should(res.tree[iTree++]).properties(licenseEntry);
-            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+            should(res.tree[iTree++]).properties(README_ENTRY);
             should(res.tree.length).equal(iTree);
             should(okitty.stats.octokitCalls).equal(1);
 
@@ -247,8 +238,8 @@
             var res = await okitty.getTree(TREE_FIRST);
             should(res).properties(resProps);
             var iTree = 0;
-            should(res.tree[iTree++]).properties(licenseEntry);
-            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+            should(res.tree[iTree++]).properties(README_ENTRY);
             should(res.tree.length).equal(iTree);
             should(okitty.stats.octokitCalls).equal(1);
 
@@ -260,77 +251,99 @@
             });
             should(res).properties(resProps);
             var iTree = 0;
-            should(res.tree[iTree++]).properties(licenseEntry);
-            should(res.tree[iTree++]).properties(readmeEntry);
+            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+            should(res.tree[iTree++]).properties(README_ENTRY);
             should(res.tree.length).equal(iTree);
             should(okitty.stats.octokitCalls).equal(1);
 
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTgetPathTree(path) => [git trees]", done=>{
-        done(); return; // TODO
+    it("TESTTESTgetBlob", done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var pathTree = await okitty.getPathTree("src/okitty.js");
-            should(pathTree.length).equal(3);
-            should.deepEqual(pathTree[0].tree.map(t=>t.path), [
-                ".gitignore", "LICENSE", "README.md", "index.js",
-                "package-lock.json", "package.json", "scripts",
-                "src", "test",
-            ]);
-            should.deepEqual(pathTree[1].tree.map(t=>t.path), [
-                "okitty.js",
-            ]);
-            should(pathTree[2].content).match(/hello world/);
+            var blobProps = {
+                sha: BLOB_HELLO,
+                size: TEXT_HELLO.length,
+                url: `${BLOBS}/${BLOB_HELLO}`,
+                content: TEXT_HELLO,
+                encoding: `utf-8`,
+            };
+
+            // Okitty supports single file_sha argument
+            var res = await okitty.getBlob(BLOB_HELLO);
+            should(res).properties(blobProps);
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // getBlob is cached
+            var res = await okitty.getBlob(BLOB_HELLO);
+            should(res).properties(blobProps);
+            should(okitty.stats.octokitCalls).equal(1);
+
             done();
         } catch (e) { done(e); } })(); 
     });
     it("createTree", done=>{
+        //done(); return; // TODO
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var tree = [{
-                "path": "README.md",
-                "type": "blob",
-                "sha": BLOB_README,
-            },{
-                path: 'oyatag',
-                type: 'tree',
-                sha: TREE_BLOB_HELLO,
-            }];
+            var tree = [ LICENSE_ENTRY, README_ENTRY ];
 
-            warnAuth('createTree');
+            // Okitty single argument array
             var res = await okitty.createTree(tree);
-            should(res.sha).equal(TREE_OYATAG_HELLO);
-            should.deepEqual(res.tree[0], {
-                path: 'README.md',
-                mode: '100644', // default blob mode
-                type: 'blob',
-                sha: BLOB_README,
-                size: 17,
-                url: `${APIPATH}/git/blobs/${BLOB_README}`,
+            should(res.sha).equal(TREE_FIRST);
+            should.deepEqual(res.tree, tree);
+            should(okitty.stats.octokitCalls).equal(1);
+
+            // createTree is cached
+            var res = await okitty.createTree(tree);
+            should(res.sha).equal(TREE_FIRST);
+            should.deepEqual(res.tree, tree);
+            should(okitty.stats.octokitCalls).equal(1);
+                                                     
+            // Standard Octokit options
+            var res = await okitty.createTree({
+                owner,
+                repo,
+                tree,
             });
-            should.deepEqual(res.tree[1], { 
-                path: 'oyatag',
-                mode: '040000',
-                type: 'tree', // default tree mode
-                sha: TREE_BLOB_HELLO,
-                url: `${APIPATH}/git/trees/${TREE_BLOB_HELLO}`,
-            });
+            should(res.sha).equal(TREE_FIRST);
+            should.deepEqual(res.tree, tree);
+            should(okitty.stats.octokitCalls).equal(1);
                                                      
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("getBlob", done=>{
+    it("TESTTESTgetPathObjects(path) => [git trees]", done=>{
         (async function() { try {
             var okitty = new Okitty({owner, repo, auth});
-            var blob = await okitty.getBlob(BLOB_HELLO);
-            should(blob.content).equal(TEXT_HELLO);
+            var headTree = await okitty.getHeadTree();
+            should(okitty.stats.octokitCalls).equal(3);
+            var testSha = headTree.tree.reduce((a,t)=> {
+                return t.path == 'test' ? t.sha : a;
+            }, null);
+            var testTree = await okitty.getTree(testSha);
+            should(okitty.stats.octokitCalls).equal(4);
+
+            // return array of tree/blob objects for each path segment
+            var res = await okitty.getPathObjects("test/hello.txt");
+            should(res.length).equal(3);
+            var iTree = 0;
+            should.deepEqual(res[iTree++], headTree);
+            should.deepEqual(res[iTree++], testTree);
+            should(res[iTree++]).properties({
+                encoding: "utf-8",
+                content: TEXT_HELLO,
+            });
+            should(res.length).equal(iTree);
+            should(okitty.stats.octokitCalls).equal(6);
             done();
         } catch (e) { done(e); } })(); 
     });
 
+    // TODO 
     it("updateRef", done=>{
+        done(); return; // TODO
         (async function() { try {
             var octokit = new Octokit({ auth });
             var sha = COMMIT_OYATAG_HELLO;
@@ -352,6 +365,7 @@
         } catch (e) { done(e); } })(); 
     });
     it("createCommit", done=>{
+        done(); return; // TODO
         (async function() { try {
             var octokit = new Octokit({ auth });
             var message = MESSAGE_OYATAG_HELLO;

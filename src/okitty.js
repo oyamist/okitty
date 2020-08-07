@@ -24,6 +24,7 @@
         }
 
         getHeadCommit(branch = this.branch) { // okitty only
+            var that = this;
             var {
                 octokit,
                 owner,
@@ -31,21 +32,28 @@
                 branch,
                 stats,
             } = this;
+            var octokitOpts;
             var pbody = (resolve, reject) => (async function() { try {
-                var resRef = await octokit.git.getRef({
+                octokitOpts = {
                     owner,
                     repo,
                     ref: `heads/${branch}`,
-                });
+                };
+                var resRef = await octokit.git.getRef(octokitOpts);
                 stats.octokitCalls++;
-                var resCommit = await octokit.git.getCommit({
+                octokitOpts = {
                     owner,
                     repo,
                     commit_sha: resRef.data.object.sha,
-                });
-                stats.octokitCalls++;
-                resolve(resCommit.data);
-            } catch(e) { reject(e);} })();
+                };
+                var result = await that.getCommit(octokitOpts);
+                resolve(result);
+            } catch(e) { 
+                console.log(`getHeadCommit`,
+                   JSON.stringify(octokitOpts),
+                   `FAILED ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
 
@@ -89,21 +97,24 @@
             if (!commit_sha) {
                 return Promise.reject(new Error("commit_sha is required"));
             }
+            var octokitOpts = {
+                owner,
+                repo,
+                commit_sha,
+            };
+            var key = `getCommit ${JSON.stringify(octokitOpts)}`;
             var pbody = (resolve, reject) => (async function() { try {
-                var opts = {
-                    owner,
-                    repo,
-                    commit_sha,
-                };
-                var key = `getCommit ${JSON.stringify(opts)}`;
                 var result = cache[key];
                 if (!result) {
-                    var res = await octokit.git.getCommit(opts);
+                    var res = await octokit.git.getCommit(octokitOpts);
                     stats.octokitCalls++;
                     cache[key] = result = res.data;
                 }
                 resolve(result);
-            } catch(e) { reject(e);} })();
+            } catch(e) { 
+                console.error(`${key} => ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
 
@@ -122,14 +133,14 @@
                 content,
                 encoding,
             } = Object.assign({}, this, opts);
+            var octokitOpts = {
+                owner,
+                repo,
+                content,
+                encoding,
+            }
+            var key = `createBlob ${JSON.stringify(octokitOpts)}`;
             var pbody = (resolve, reject) => (async function() { try {
-                var octokitOpts = {
-                    owner,
-                    repo,
-                    content,
-                    encoding,
-                }
-                var key = `createBlob ${JSON.stringify(octokitOpts)}`;
                 var result = cache[key];
                 if (!result) {
                     var res = await octokit.git.createBlob(octokitOpts);
@@ -138,11 +149,14 @@
 
                 }
                 resolve(result);
-            } catch(e) { reject(e);} })();
+            } catch(e) { 
+                console.error(`${key} => ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
 
-        getPathTree(path="") {
+        getPathObjects(path="") { // okitty only
             var that = this;
             var {
                 octokit,
@@ -184,23 +198,46 @@
             return new Promise(pbody);
         }
 
-        getBlob(file_sha) {
+        getBlob(arg) {
             var that = this;
             var {
                 octokit,
+                cache,
+                stats,
+            } = that;
+            var opts = Object.assign({}, this, typeof arg === 'string'
+                ? { file_sha: arg }
+                : arg);
+            var {
                 owner,
                 repo,
-            } = that;
+                encoding,
+                file_sha,
+            } = opts;
+            encoding = encoding || this.encoding;
+            var octokitOpts = {
+                owner,
+                repo,
+                file_sha,
+            };
+            var key = `getBlob ${JSON.stringify(octokitOpts)}`;
             var pbody = (resolve, reject) => (async function() { try {
-                var res = await octokit.git.getBlob({
-                    owner,
-                    repo,
-                    file_sha,
-                });
-                var blob = Object.assign({}, res.data);
-                blob.content = Base64.decode(blob.content);
+                var cached = cache[key];
+                if (!cached) {
+                    var res = await octokit.git.getBlob(octokitOpts);
+                    cache[key] = cached = res.data;
+                    stats.octokitCalls++;
+                }
+                var blob = Object.assign({}, cached);
+                if (encoding === "utf-8") {
+                    blob.content = Base64.decode(blob.content);
+                    blob.encoding = encoding;
+                }
                 resolve(blob);
-            } catch(e) { reject(e);} })();
+            } catch(e) { 
+                console.error(`${key} => ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
 
@@ -217,13 +254,13 @@
                 repo,
                 tree_sha,
             } = Object.assign({}, this, argObj);
+            var octokitOpts = {
+                owner,
+                repo,
+                tree_sha,
+            };
+            var key = `getTree ${JSON.stringify(octokitOpts)}`;
             var pbody = (resolve, reject) => (async function() { try {
-                var octokitOpts = {
-                    owner,
-                    repo,
-                    tree_sha,
-                };
-                var key = `getTree ${JSON.stringify(octokitOpts)}`;
                 var result = cache[key];
                 if (!result) {
                     var res = await octokit.git.getTree(octokitOpts);
@@ -231,27 +268,50 @@
                     stats.octokitCalls++;
                 }
                 resolve(result);
-            } catch(e) { reject(e);} })();
+            } catch(e) { 
+                console.error(`${key} => ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
 
-        createTree(tree) {
+        createTree(arg) {
             var that = this;
             var {
                 octokit,
+                cache,
+                stats,
+            } = that;
+            var {
                 owner,
                 repo,
-            } = that;
+                tree,
+            } = Object.assign({}, this, 
+                arg instanceof Array ? { tree: arg } : arg);
+            if (!(tree instanceof Array)) {
+                return Promise.reject(new Error(
+                    `expected array for tree`));
+            }
+            var octokitOpts = {
+                owner,
+                repo,
+                tree: tree.map(t => Object.assign({
+                    mode: t.type === 'tree' ? '040000' : '100644',
+                }, t)),
+            };
+            var key = `createTree ${JSON.stringify(octokitOpts)}`;
             var pbody = (resolve, reject) => (async function() { try {
-                var { data } = await octokit.git.createTree({
-                    owner,
-                    repo,
-                    tree: tree.map(t => Object.assign({
-                        mode: t.type === 'tree' ? '040000' : '100644',
-                    }, t)),
-                });
-                resolve(data);
-            } catch(e) { reject(e);} })();
+                var result = cache[key];
+                if (!result) {
+                    var res = await octokit.git.createTree(octokitOpts);
+                    cache[key] = result = res.data;
+                    stats.octokitCalls++;
+                }
+                resolve(result);
+            } catch(e) { 
+                console.error(`${key} => ${e.message}`);
+                reject(e);
+            } })();
             return new Promise(pbody);
 
         }

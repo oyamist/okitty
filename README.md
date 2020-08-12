@@ -1,18 +1,32 @@
 # Okitty
-Simple Github applications that only require file CRUD
-can use Okitty as a minimalist wrapper for octokit, which
+Okitty is a minimalist file CRUD wrapper for octokit, which
 is the huge official client API for accessing Github.
-Octokit file CRUD requires a lot of calls to generate
-blobs, trees, commits and references. Okitty simplifies those
-calls to:
+Okitty will also let you get, update and create Github blobs,
+commits, trees and references. Okitty supports octokit 
+method parameters while providing convenient extensions for 
+common use cases:
 
 ```
-const Okitty = require("okitty");
-var okitty = new Okitty({owner, repo, auth});
-var resWrite = await okitty.writeFile("hello world", "test/hello.txt");
-var { content } = await okitty.readFile("test/hello.txt");
-console.log(content); // hello world
+var okitty = await new Okitty({
+  owner,
+  repo,
+  branch,
+  auth,
+}).initialize();
+
+// Okitty short form
+var commit = await okitty.getCommit(commit_sha); 
+
+// Okitty supports full octokit parameters
+var commit = await okitty.getCommit({
+  owner, 
+  repo, 
+  commit_sha,
+}); // octokit
+  
 ```
+
+Each Okitty instance caches calls so you don't have to.
 
 ### Installation (Library)
 To use Okitty in an npm project:
@@ -47,7 +61,7 @@ var content = await okitty.readFile("/test/hello.txt");
 // hello world
 ```
 
-### writeFile
+#### writeFile
 ```
 var options = {owner, repo, auth, branch};
 var okitty = await new Okitty(options).initialize();

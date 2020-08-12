@@ -35,3 +35,27 @@ for read/write access to a Github repository.
 ```
 ./scripts/install.sh
 ```
+
+### Examples
+See [test/okitty.js](https://github.com/oyamist/okitty/blob/test-branch/test/okitty.js)
+
+#### readFile
+```
+var options = {owner, repo, auth, branch};
+var okitty = await new Okitty(options).initialize();
+var content = await okitty.readFile("/test/hello.txt");
+// hello world
+```
+
+### writeFile
+```
+var options = {owner, repo, auth, branch};
+var okitty = await new Okitty(options).initialize();
+var res = await okitty.writeFile("/test/hello.txt", "goodbye");
+// { 
+//    ref:..., 
+//    node_id:...,
+//    url:...,
+//    object: { sha: ... }
+// }
+```

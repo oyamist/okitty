@@ -11,6 +11,9 @@
             this.repo = opts.repo || "okitty";
             this.indent = opts.indent || 2;
             this.branch = opts.branch || "master";
+            this.message = opts.message;
+            this.author = opts.author;
+            this.committer = opts.committer;
             this.encoding = opts.encoding || "utf-8";
             this.stats = {
                 octokitCalls: 0,
@@ -255,7 +258,7 @@
             return new Promise(pbody);
         }
 
-        pathParts(path) {
+        pathParts(path="") {
             var pathParts = path.split("/");
             var iPathLast = pathParts.length - 1;
             if (pathParts[0].length === 0) {
@@ -264,20 +267,19 @@
             return pathParts;
         }
 
-        getPath(pathOrOpts) { // okitty only
+        getPathExisting(pathOrOpts) { // okitty only
             if (!this.initialized) {
                 return Promise.reject(new Error(MSG_INITIALIZE));
             }
             var that = this;
+            var path = typeof pathOrOpts === 'string' 
+                ? pathOrOpts
+                : pathOrOpts && pathOrOpts.path;
             var {
                 octokit,
                 owner,
                 repo,
-                path,
-            } = Object.assign(Object.assign({}, that),
-                typeof pathOrOpts === 'string' 
-                    ? { path: pathOrOpts } 
-                    : pathOrOpts);
+            } = that;
             var stack = new Error().stack;
             var pbody = (resolve, reject) => (async function() { try {
                 var curTree = await that.getHeadTree();
@@ -307,6 +309,26 @@
                     }
                     curTree = nextTree;
                 }
+                resolve(pathTrees);
+            } catch(e) { 
+                that.error(JSON.stringify(pathOrOpts), e.message, stack);
+                reject(e);
+            } })();
+            return new Promise(pbody);
+        }
+
+        getPath(pathOrOpts) { // okitty only
+            if (!this.initialized) {
+                return Promise.reject(new Error(MSG_INITIALIZE));
+            }
+            var that = this;
+            var path = typeof pathOrOpts === 'string' 
+                ? pathOrOpts
+                : pathOrOpts && pathOrOpts.path;
+            var stack = new Error().stack;
+            var pbody = (resolve, reject) => (async function() { try {
+                var pathParts = that.pathParts(path);
+                var pathTrees = await that.getPathExisting(pathOrOpts);
                 if (pathTrees.length !== pathParts.length+1) {
                     var badPart = pathParts[pathTrees.length-1];
                     throw new Error(`${badPart} not found in ${path}`);
@@ -442,7 +464,52 @@
                 reject(e);
             } })();
             return new Promise(pbody);
+        }
 
+        createCommit(arg) {
+            if (!this.initialized) {
+                return Promise.reject(new Error(MSG_INITIALIZE));
+            }
+            var that = this;
+            var {
+                octokit,
+                cache,
+                stats,
+            } = that;
+            var {
+                owner,
+                repo,
+                message,
+                tree,
+                author,
+                committer,
+                parents,
+            } = Object.assign(Object.assign({}, this), 
+                arg instanceof Array ? { tree: arg } : arg);
+            if (!message) {
+                return Promise.reject(new Error(`message is required`));
+            }
+            var pbody = (resolve,reject)=>(async function() { try {
+                if (!parents) {
+                    let headCommit = that.getHeadCommit();
+                    parents = [headCommit.sha];
+                }
+                var octokitOpts = {
+                    owner,
+                    repo,
+                    tree,
+                    message,
+                    author,
+                    committer,
+                    parents,
+                };
+                var res = await octokit.git.createCommit(octokitOpts);
+                resolve(res.data);
+            } catch(e) { 
+                that.error(JSON.stringify(octokitOpts), e.message);
+                reject(e);
+            } })();
+            return new Promise(pbody);
         }
 
         readFile(path) {
@@ -464,26 +531,122 @@
             return new Promise(pbody);
         }
 
-        writeFile(path, content) {
+
+        updateRef(opts) {
+            var that = this;
+            var {
+                octokit,
+                stats,
+            } = that;
+            var {
+                owner,
+                repo,
+                ref,
+                sha,
+            } = Object.assign(Object.assign({}, that), opts);
+            var pbody = (resolve, reject) => (async function() { try {
+                var octokitOpts = {
+                    owner,
+                    repo,
+                    ref,
+                    sha,
+                };
+                stats.octokitCalls++;
+                var res = await octokit.git.updateRef(octokitOpts);
+                resolve(res.data);
+            } catch(e) { 
+                that.error(JSON.stringify(octokitOpts), e.message);
+                reject(e);
+            } })();
+            return new Promise(pbody);
+          }
+
+        writeFile(pathOrArgs, content) {
             if (!this.initialized) {
                 return Promise.reject(new Error(MSG_INITIALIZE));
             }
             var that = this;
             var {
                 octokit,
-                owner,
-                repo,
                 stats,
             } = that;
+            var {
+                owner,
+                repo,
+                path,
+                message,
+                author,
+                branch,
+                committer,
+                parents,
+            } = Object.assign(Object.assign({}, that), 
+                typeof pathOrArgs === 'string'
+                    ? { path: pathOrArgs }
+                    : pathOrArgs);
             if (!path) {
                 return Promise.reject(new Error("path is required"));
             }
             var pbody = (resolve, reject) => (async function() { try {
+                var headCommit = await that.getHeadCommit();
+                var pathParts = that.pathParts(path);
+                var pathLen = pathParts.length;
+                var pathTrees = await that.getPathExisting(path);
                 var blob = await that.createBlob(content);
-                var pathParts = path.split("/");
-                var trees = that.getPath(path);
-                resolve(res.data);
-            } catch(e) { reject(e);} })();
+                var sha = blob.sha;
+                var type = 'blob';
+                var mode = '100644';
+                var trace;
+                for (var iPath=pathLen; iPath-- > 0; ){
+                    let objectPath = pathParts[iPath];
+                    let pathTree = pathTrees[iPath];
+                    let objects = pathTree && pathTree.tree || [];
+                    let found = objects.reduce((a,o)=>{
+                        return o.path === objectPath
+                            ? ((o.sha = sha), a+1)
+                            : a;
+                    }, 0);
+                    if (!found) {
+                        objects.push({ 
+                            path: objectPath, 
+                            type, 
+                            mode, 
+                            sha, 
+                        });
+                    }
+                    trace = `createTree ${objectPath}`;
+                    var res = await that.createTree(objects);
+                    sha = res.sha;
+                    type = 'tree';
+                    mode = '040000';
+                }
+                var result = headCommit;
+                if (headCommit.tree === sha) {
+                    that.log(`no change commit:`, headCommit.sha);
+                } else {
+                    let commitArgs = {
+                        owner,
+                        repo,
+                        path,
+                        message,
+                        author,
+                        committer,
+                        parents: [headCommit.sha],
+                        tree: sha,
+                    };
+                    let newCommit = await that.createCommit(commitArgs);
+                    that.log(`writeFile commit:${newCommit.sha}`);
+                    let ref = `heads/${branch}`;
+                    let res = await that.updateRef({
+                        ref,
+                        sha: newCommit.sha,
+                    });
+                    result = newCommit;
+                }
+                resolve(result);
+            } catch(e) { 
+                that.error(trace, e.message);
+                reject(e);
+            } })();
             return new Promise(pbody);
         }
     } 

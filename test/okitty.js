@@ -18,7 +18,12 @@
         repo,
     } = fs.existsSync(CONFIGPATH)
         ? JSON.parse(fs.readFileSync(CONFIGPATH))
-        : {};
+        : {
+            warning: "test-config.json not found (UNAUTHORIZED)",
+            token: "no-token",
+            owner: "no-owner",
+            repo: "no-repo",
+        };
     const APIPATH = `https://api.github.com/repos/${owner}/${repo}`;
     const BLOBS = `${APIPATH}/git/blobs`;
     const TREES = `${APIPATH}/git/trees`;
@@ -78,10 +83,11 @@
 
     var octokit = new Octokit({auth});
 
-    it("default ctor", done=>{
+    it("TESTTESTdefault ctor", done=>{
         (async function() { try {
             var okitty = new Okitty();
-            should(okitty.hasOwnProperty("auth")).equal(false);
+            var eCaught;
+            should(okitty.auth).equal(undefined);
             should(okitty).properties({
                 owner: undefined,
                 repo: "okitty",
@@ -92,12 +98,10 @@
                 },
             });
 
-            // Okitty uses octokit
-            should(okitty.octokit).instanceOf(Octokit);
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("custom ctor", done=>{
+    it("TESTTESTcustom ctor", done=>{
         (async function() { try {
             var owner = "test-owner";
             var repo = "test-repo";
@@ -111,16 +115,69 @@
                 auth,
                 indent,
             });
-            should(okitty.hasOwnProperty("auth")).equal(false);
             should(okitty).properties({
                 owner,
                 repo,
                 branch,
                 indent,
+                auth,
                 stats: {
                     octokitCalls: 0,
                 },
             });
+            done();
+        } catch (e) { done(e); } })(); 
+    });
+    it("TESTTESTinitialize(...) is required", done=>{
+        (async function() { try {
+            var okitty = new Okitty({
+                owner,
+                repo,
+            });
+            var eCaught;
+            try {
+                await okitty.getHeadCommit();
+            } catch(e) { eCaught = e; };
+            should(eCaught).instanceOf(Error);
+            should(eCaught.message).match(/initialize.. is required/iu);
+            var res = await okitty.initialize({auth});
+            should(res).equal(okitty);
+
+            eCaught = undefined;
+            try {
+                var res = await okitty.getHeadCommit();
+            } catch(e) { eCaught = e; };
+            should(eCaught).equal(undefined);
+            should(res.parents).instanceOf(Array);
+
+            done();
+        } catch (e) { done(e); } })(); 
+    });
+    it("TESTESTauthentication is required",done=>{
+        (async function() { try {
+            var eExpected;
+
+            // no auth
+            try {
+                var okitty = await new Okitty({owner, repo, auth: undefined})
+                    .initialize();
+            } catch(e) {
+                eExpected = e;
+            }
+            should(eExpected).instanceOf(Error);
+            should(eExpected.message).match(/auth is required/);
+
+            // bad Auth
+            var badAuth = {};
+            try {
+                var opts = {owner, repo, auth: badAuth};
+                var okitty = await new Okitty(opts).initialize();
+            } catch(e) {
+                eExpected = e;
+            }
+            should(eExpected).instanceOf(Error);
+            should(eExpected.message)
+                .match(/Token passed to createTokenAuth is not a string/);
             done();
         } catch (e) { done(e); } })(); 
     });

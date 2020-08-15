@@ -1,6 +1,6 @@
 {
   "name": "okitty",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A minimalist wrapper for octokit",
   "author": "Karl Lew",
   "private": false,

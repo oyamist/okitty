@@ -23,11 +23,7 @@
             Object.defineProperty(this, "cache", {
                 value: {},
             });
-            Object.defineProperty(this, "octokit", {
-                value: new Octokit({ 
-                    auth: opts.auth,
-                }),
-            });
+            this.auth = opts.auth;
         }
 
         initialize(opts) {
@@ -42,7 +38,14 @@
                 branch,
                 stats,
                 verbose,
+                auth,
             } = Object.assign(Object.assign({}, that), opts);
+            if (!auth) {
+                return Promise.reject(new Error("auth is required"));
+            }
+            Object.defineProperty(this, "octokit", {
+                value: new Octokit({ auth, }),
+            });
             var ref = `heads/${branch}`;
             var octokitOpts = { owner, repo, ref, };
             var stack = new Error().stack;

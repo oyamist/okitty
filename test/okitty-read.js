@@ -1,8 +1,8 @@
-(typeof describe === 'function') && describe("okitty", function() {
+(typeof describe === 'function') && describe("okitty (read)", function() {
     const fs = require('fs');
     const path = require('path');
-    const winston = require('winston');
     const should = require("should");
+    const { logger } = require('log-instance');
     const { Octokit } = require("@octokit/rest");
     const { createTokenAuth } = require("@octokit/auth-token");
     const {
@@ -11,19 +11,22 @@
     const Base64 = require("js-base64");
     const JSON5 = require('json5');
     const LOCALDIR = path.join(__dirname, '..', 'local');
-    const CONFIGPATH = path.join(LOCALDIR, 'test-config.json');
+
+    // Unauthenticated tests will fail due to API throttling
+    // Provide credentials in local/test-okitty.json
+    const TESTCONFIG = path.join(LOCALDIR, 'test-config.json');
     var {
-        token: auth,
+        tokenRead: auth,
         owner,
         repo,
-    } = fs.existsSync(CONFIGPATH)
-        ? JSON.parse(fs.readFileSync(CONFIGPATH))
+    } = fs.existsSync(TESTCONFIG)
+        ? JSON.parse(fs.readFileSync(TESTCONFIG))
         : {
-            warning: "test-config.json not found (UNAUTHORIZED)",
-            token: "no-token",
-            owner: "no-owner",
-            repo: "no-repo",
+            tokenRead: undefined, // Github Personal Access Token
+            owner: "oyamist",
+            repo: "okitty",
         };
+
     const APIPATH = `https://api.github.com/repos/${owner}/${repo}`;
     const BLOBS = `${APIPATH}/git/blobs`;
     const TREES = `${APIPATH}/git/trees`;
@@ -42,19 +45,7 @@
     const COMMIT_TEST_HELLO = "a238d38570238ebdc1ad1b97edcc83d147875978";
 
     const BLOB_HELLO = "3b18e512dba79e4c8300dd08aeb37f8e728b8dad";
-    const DATE_WRITEFILE = "2020-08-05T08:04:08Z";
-    const AUTHOR_WRITEFILE = {
-        name: "test-author",
-        email: "author@noreply.com",
-        date: DATE_WRITEFILE,
-    };
-    const COMMITTER_WRITEFILE = {
-        name: "test-committer",
-        email: "committer@noreply.com",
-        date: DATE_WRITEFILE,
-    };
     const TEXT_HELLO = "hello world\n";
-    const TEXT_WRITEFILE = "hello writeFile\n";
 
     const COMMIT_FIRST = "bdfd559ae91a75fc69c5a580f4da24069ff931e6";
     const TREE_FIRST = "56f0af3e3b1f281019ce997a4c7482c6d753c157";
@@ -79,11 +70,12 @@
         url: `${BLOBS}/${BLOB_README}`,
     };
 
+    logger.logLevel = 'warn';
     this.timeout(10*1000);
 
     var octokit = new Octokit({auth});
 
-    it("TESTTESTdefault ctor", done=>{
+    it("default ctor", done=>{
         (async function() { try {
             var okitty = new Okitty();
             var eCaught;
@@ -101,7 +93,7 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTcustom ctor", done=>{
+    it("custom ctor", done=>{
         (async function() { try {
             var owner = "test-owner";
             var repo = "test-repo";
@@ -128,44 +120,45 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTinitialize(...) is required", done=>{
-        (async function() { try {
-            var okitty = new Okitty({
-                owner,
-                repo,
-            });
-            var eCaught;
-            try {
-                await okitty.getHeadCommit();
-            } catch(e) { eCaught = e; };
-            should(eCaught).instanceOf(Error);
-            should(eCaught.message).match(/initialize.. is required/iu);
-            var res = await okitty.initialize({auth});
-            should(res).equal(okitty);
+    it("initialize(...) is required", async()=>{
+        var okitty = new Okitty({
+            owner,
+            repo,
+        });
 
-            eCaught = undefined;
-            try {
-                var res = await okitty.getHeadCommit();
-            } catch(e) { eCaught = e; };
-            should(eCaught).equal(undefined);
-            should(res.parents).instanceOf(Array);
+        // use without initialization throws Error
+        logger.error("EXPECTED ERROR (BEGIN)");
+        var eCaught;
+        try {
+            await okitty.getHeadCommit();
+        } catch(e) { eCaught = e; };
+        logger.error("EXPECTED ERROR (END)");
+        should(eCaught).instanceOf(Error);
+        should(eCaught.message).match(/initialize.. is required/iu);
 
-            done();
-        } catch (e) { done(e); } })(); 
+        var res = await okitty.initialize({auth});
+        should(res).equal(okitty);
+        eCaught = undefined;
+        try {
+            var res = await okitty.getHeadCommit();
+        } catch(e) { eCaught = e; };
+        should(eCaught).equal(undefined);
+        should(res.parents).instanceOf(Array);
     });
     it("TESTESTauthentication is required",done=>{
         (async function() { try {
             var eExpected;
 
             // no auth
+            var auth = undefined;
             try {
-                var okitty = await new Okitty({owner, repo, auth: undefined})
+                var okitty = await new Okitty({owner, repo, auth})
                     .initialize();
             } catch(e) {
                 eExpected = e;
             }
-            should(eExpected).instanceOf(Error);
-            should(eExpected.message).match(/auth is required/);
+            //should(eExpected).instanceOf(Error);
+            //should(eExpected.message).match(/auth is required/);
 
             // bad Auth
             var badAuth = {};
@@ -259,41 +252,6 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("createBlob(content) => git blob", done=>{
-        (async function() { try {
-            var okitty = await new Okitty({owner, repo, auth}).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var content = TEXT_HELLO;
-            var encoding = "utf-8";
-            var url = [
-                "https://api.github.com/repos",
-                owner,
-                repo,
-                "git/blobs",
-                BLOB_HELLO,
-            ].join("/");
-            var res = await okitty.createBlob(content);
-            should.deepEqual(res, { sha: BLOB_HELLO, url, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            // createBlob is cached
-            var res = await okitty.createBlob(content);
-            should.deepEqual(res, { sha: BLOB_HELLO, url, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            // Okitty supports standard Octokit option object
-            var res = await okitty.createBlob({
-                owner,
-                repo,
-                content,
-                encoding,
-            });
-            should.deepEqual(res, { sha: BLOB_HELLO, url, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-                
-            done();
-        } catch (e) { done(e); } })(); 
-    });
     it("getTree", done=>{
         (async function() { try {
             var okitty = await new Okitty({owner, repo, auth}).initialize();
@@ -362,41 +320,7 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("createTree", done=>{
-        (async function() { try {
-            var okitty = await new Okitty({owner, repo, auth}).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var license = Object.assign({}, LICENSE_ENTRY);
-            delete license.url; // (optional)
-            delete license.size; // (optional)
-            var tree = [ license, README_ENTRY ];
-
-            // Okitty single argument array
-            var res = await okitty.createTree(tree);
-            should(res.sha).equal(TREE_FIRST);
-            should.deepEqual(res.tree, [LICENSE_ENTRY, README_ENTRY]);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            // createTree is cached
-            var res = await okitty.createTree(tree);
-            should(res.sha).equal(TREE_FIRST);
-            should.deepEqual(res.tree, [LICENSE_ENTRY, README_ENTRY]);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-                                                     
-            // Standard Octokit options
-            var res = await okitty.createTree({
-                owner,
-                repo,
-                tree,
-            });
-            should(res.sha).equal(TREE_FIRST);
-            should.deepEqual(res.tree, [LICENSE_ENTRY, README_ENTRY]);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-                                                     
-            done();
-        } catch (e) { done(e); } })(); 
-    });
-    it("TESTTESTgetPathExisting(path) => [git existing trees]", done=>{
+    it("getPathExisting(path) => [git existing trees]", done=>{
         (async function() { try {
             var okitty = await new Okitty({owner, repo, auth}).initialize();
             var octokitCalls = okitty.stats.octokitCalls;
@@ -497,78 +421,31 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("writeFile(...) writes file to path", done=>{
-        (async function() { try {
-            var branch = "test-branch";
-            var author = AUTHOR_WRITEFILE;
-            var committer = COMMITTER_WRITEFILE;
-            var message = "test-message";
-            var okitty = await new Okitty({
-                owner, 
-                repo, 
-                auth,
-                branch,
-                author,
-                committer,
-                message,
-            }).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var headCommit = await okitty.getHeadCommit();
+    it("TESTTESTgetRef(branch) => branch HEAD commit", async()=>{
+        var branch = "test-branch";
+        var opts = { owner, repo, auth, branch, };
+        var okitty = await new Okitty(opts).initialize();
+        var octokitCalls = okitty.stats.octokitCalls;
+        var octokitOpts = {
+            owner,
+            repo,
+            ref: `heads/${branch}`,
+        };
 
-            // Relative path
-            var path = "test/a/b/writefile.txt";
-            var content = TEXT_WRITEFILE;
-            var resWrite = await okitty.writeFile(path, content);
-            var { 
-                parents,
-            } = resWrite;
-            should(okitty.stats.octokitCalls).equal(octokitCalls+15);
-            should.deepEqual(parents.map(p=>p.sha), [headCommit.sha]);
-            var resRef = await okitty.getRef(`heads/${branch}`);
-            should(resRef.object.sha).equal(resWrite.sha);
+        // Okitty extends ocktokit with branch string argument
+        var resRef = await okitty.getRef(`heads/${branch}`);
+        should(resRef).properties(["ref", "node_id", "url", "object"]);
+        var octokitRes = await octokit.git.getRef(octokitOpts);
+        should.deepEqual( resRef, octokitRes.data,);
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
 
-            done();
-        } catch (e) { done(e); } })(); 
+        // Okitty supports standard Octokit options
+        should.deepEqual( await okitty.getRef(octokitOpts), resRef,);
+        should(okitty.stats.octokitCalls).equal(octokitCalls+2);
     });
-    it("initialize() => may create branch", done=>{
-        (async function() { try {
-            var branch = "test-branch";
-            var opts = { owner, repo, auth, branch};
-            var okitty = await new Okitty(opts);
-            var octokitCalls = okitty.stats.octokitCalls;
-            should(okitty.initialized).equal(false);
-            should(okitty.stats.octokitCalls).equal(0);
-            should(await okitty.initialize()).equal(okitty);
-            should(okitty.initialized).equal(true);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-            done();
-        } catch (e) { done(e); } })(); 
-    });
-    it("getRef(branch) => branch HEAD commit", done=>{
-        (async function() { try {
-            var branch = "test-branch";
-            var opts = { owner, repo, auth, branch, };
-            var okitty = await new Okitty(opts).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var octokitOpts = {
-                owner,
-                repo,
-                ref: `heads/${branch}`,
-            };
-            var octokitRes = await octokit.git.getRef(octokitOpts);
-
-            // Okitty extends ocktokit with branch string argument
-            var resRef = await okitty.getRef(`heads/${branch}`);
-            should(resRef).properties(["ref", "node_id", "url", "object"]);
-            should.deepEqual( resRef, octokitRes.data,);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            // Okitty supports standard Octokit options
-            should.deepEqual( await okitty.getRef(octokitOpts), resRef,);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+2);
-
-            done();
-        } catch (e) { done(e); } })(); 
+    it("TESTTESTtbd", async()=>{
+        var okitty = new Okitty();
+        var eCaught;
     });
 
 })

@@ -14,7 +14,8 @@
 
     const TESTCONFIG = path.join(LOCALDIR, 'test-config.json');
     var {
-        tokenWrite: auth,
+        tokenRead,          // read-only personal access token
+        tokenWrite: auth,   // write-capable personal access token
         owner,
         repo,
     } = fs.existsSync(TESTCONFIG)
@@ -85,6 +86,23 @@
 
     var octokit = new Octokit({auth});
 
+    it("TESTTESTUnauthenticated write should fail", async()=>{
+        var okitty = await new Okitty({
+            owner: "oyamist", 
+            repo: "okitty", 
+            auth: tokenRead, // read-only personal access token
+        }).initialize();
+        var eCaught = null;
+        try {
+            logger.error("EXPECTED ERROR (BEGIN)");
+            await okitty.createBlob(TEXT_HELLO);
+        } catch(e) {
+            eCaught = e;
+        } finally {
+            logger.error("EXPECTED ERROR (END)");
+        }
+        should(eCaught.message).match(/Not Found/);
+    });
     it("TESTTESTcreateBlob(content) => git blob", async()=>{
         if (auth == null) {
             console.error("Test ignored (no personal access token)");

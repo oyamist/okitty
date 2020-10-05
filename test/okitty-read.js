@@ -16,7 +16,7 @@
     // Provide credentials in local/test-okitty.json
     const TESTCONFIG = path.join(LOCALDIR, 'test-config.json');
     var {
-        tokenRead: auth,
+        tokenRead,
         owner,
         repo,
     } = fs.existsSync(TESTCONFIG)
@@ -26,6 +26,7 @@
             owner: "oyamist",
             repo: "okitty",
         };
+    const auth = tokenRead;
 
     const APIPATH = `https://api.github.com/repos/${owner}/${repo}`;
     const BLOBS = `${APIPATH}/git/blobs`;
@@ -209,91 +210,83 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("getCommit(sha) => git commit", done=>{
-        (async function() { try {
-            var commitProps = {
-                sha: COMMIT_FIRST,
-                message: MESSAGE_FIRST,
-                parents: PARENTS_FIRST,
-            };
-            var committer = {
-                name: 'GitHub',
-                email: 'noreply@github.com',
-                date: '2020-08-06T11:33:12Z',
-            };
-            var commit_sha = COMMIT_FIRST;
-            
-            // Okitty extension takes a commit sha
-            var okitty = await new Okitty({owner, repo, auth}).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var commit = await okitty.getCommit(COMMIT_FIRST);
-            should(commit).properties(commitProps);
-            should(commit.author).properties(["name", "email", "date"]);
-            should.deepEqual(commit.committer, committer);
-            should(commit.tree).properties({ sha: TREE_FIRST, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
+    it("getCommit(sha) => git commit", async()=>{
+        var commitProps = {
+            sha: COMMIT_FIRST,
+            message: MESSAGE_FIRST,
+            parents: PARENTS_FIRST,
+        };
+        var committer = {
+            name: 'GitHub',
+            email: 'noreply@github.com',
+            date: '2020-08-06T11:33:12Z',
+        };
+        var commit_sha = COMMIT_FIRST;
+        
+        // Okitty extension takes a commit sha
+        var okitty = await new Okitty({owner, repo, auth}).initialize();
+        var octokitCalls = okitty.stats.octokitCalls;
+        var commit = await okitty.getCommit(COMMIT_FIRST);
+        should(commit).properties(commitProps);
+        should(commit.author).properties(["name", "email", "date"]);
+        should.deepEqual(commit.committer, committer);
+        should(commit.tree).properties({ sha: TREE_FIRST, });
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
 
-            // Okitty supports Octokit standard options object
-            var commit = await okitty.getCommit({owner, repo, commit_sha});
-            should(commit).properties(commitProps);
-            should(commit.author).properties(["name", "email", "date"]);
-            should.deepEqual(commit.committer, committer);
-            should(commit.tree).properties({ sha: TREE_FIRST, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
+        // Okitty supports Octokit standard options object
+        var commit = await okitty.getCommit({owner, repo, commit_sha});
+        should(commit).properties(commitProps);
+        should(commit.author).properties(["name", "email", "date"]);
+        should.deepEqual(commit.committer, committer);
+        should(commit.tree).properties({ sha: TREE_FIRST, });
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
 
-            // getCommit is cached
-            var commit = await okitty.getCommit({owner, repo, commit_sha});
-            should(commit).properties(commitProps);
-            should(commit.author).properties(["name", "email", "date"]);
-            should.deepEqual(commit.committer, committer);
-            should(commit.tree).properties({ sha: TREE_FIRST, });
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            done();
-        } catch (e) { done(e); } })(); 
+        // getCommit is cached
+        var commit = await okitty.getCommit({owner, repo, commit_sha});
+        should(commit).properties(commitProps);
+        should(commit.author).properties(["name", "email", "date"]);
+        should.deepEqual(commit.committer, committer);
+        should(commit.tree).properties({ sha: TREE_FIRST, });
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
     });
-    it("getTree", done=>{
-        (async function() { try {
-            var okitty = await new Okitty({owner, repo, auth}).initialize();
-            var octokitCalls = okitty.stats.octokitCalls;
-            var resProps = {
-                sha: TREE_FIRST,
-                url: `${TREES}/${TREE_FIRST}`,
-            };
+    it("getTree", async()=>{
+        var okitty = await new Okitty({owner, repo, auth}).initialize();
+        var octokitCalls = okitty.stats.octokitCalls;
+        var resProps = {
+            sha: TREE_FIRST,
+            url: `${TREES}/${TREE_FIRST}`,
+        };
 
-            // Okitty extension takes tree SHA
-            var res = await okitty.getTree(TREE_FIRST);
-            should(res).properties(resProps);
-            var iTree = 0;
-            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
-            should(res.tree[iTree++]).properties(README_ENTRY);
-            should(res.tree.length).equal(iTree);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
+        // Okitty extension takes tree SHA
+        var res = await okitty.getTree(TREE_FIRST);
+        should(res).properties(resProps);
+        var iTree = 0;
+        should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+        should(res.tree[iTree++]).properties(README_ENTRY);
+        should(res.tree.length).equal(iTree);
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
 
-            // getTree is cached
-            var res = await okitty.getTree(TREE_FIRST);
-            should(res).properties(resProps);
-            var iTree = 0;
-            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
-            should(res.tree[iTree++]).properties(README_ENTRY);
-            should(res.tree.length).equal(iTree);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
+        // getTree is cached
+        var res = await okitty.getTree(TREE_FIRST);
+        should(res).properties(resProps);
+        var iTree = 0;
+        should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+        should(res.tree[iTree++]).properties(README_ENTRY);
+        should(res.tree.length).equal(iTree);
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
 
-            // Okitty supports Octokit options
-            var res = await okitty.getTree({
-                owner,
-                repo,
-                tree_sha: TREE_FIRST,
-            });
-            should(res).properties(resProps);
-            var iTree = 0;
-            should(res.tree[iTree++]).properties(LICENSE_ENTRY);
-            should(res.tree[iTree++]).properties(README_ENTRY);
-            should(res.tree.length).equal(iTree);
-            should(okitty.stats.octokitCalls).equal(octokitCalls+1);
-
-            done();
-        } catch (e) { done(e); } })(); 
+        // Okitty supports Octokit options
+        var res = await okitty.getTree({
+            owner,
+            repo,
+            tree_sha: TREE_FIRST,
+        });
+        should(res).properties(resProps);
+        var iTree = 0;
+        should(res.tree[iTree++]).properties(LICENSE_ENTRY);
+        should(res.tree[iTree++]).properties(README_ENTRY);
+        should(res.tree.length).equal(iTree);
+        should(okitty.stats.octokitCalls).equal(octokitCalls+1);
     });
     it("getBlob", done=>{
         (async function() { try {
@@ -421,7 +414,7 @@
             done();
         } catch (e) { done(e); } })(); 
     });
-    it("TESTTESTgetRef(branch) => branch HEAD commit", async()=>{
+    it("getRef(branch) => branch HEAD commit", async()=>{
         var branch = "test-branch";
         var opts = { owner, repo, auth, branch, };
         var okitty = await new Okitty(opts).initialize();
@@ -443,9 +436,27 @@
         should.deepEqual( await okitty.getRef(octokitOpts), resRef,);
         should(okitty.stats.octokitCalls).equal(octokitCalls+2);
     });
-    it("TESTTESTtbd", async()=>{
-        var okitty = new Okitty();
-        var eCaught;
+    it("TESTTESTcan read other repos", async()=>{
+        var okitty = await new Okitty({
+            owner: "suttacentral",
+            repo: "sc-data",
+            auth: tokenRead, // oyamist personal access token
+        }).initialize();
+        var tree_sha = "63b81709250ad262bfb7ada11e4c0dc8536962c1";
+
+        var eCaught = null;
+        try {
+            // Using a valid personal access token from another
+            // account will be treated as an unauthenticated request
+            // and will be throttled
+            logger.error("EXPECTED ERROR (BEGIN)");
+            var res = await okitty.getCommit(tree_sha);
+            console.log(`dbg `, res);
+        } catch(e) {
+            eCaught = e;
+        } finally {
+            logger.error("EXPECTED ERROR (END)");
+        }
     });
 
 })

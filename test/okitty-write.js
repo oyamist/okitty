@@ -86,7 +86,7 @@
 
     var octokit = new Octokit({auth});
 
-    it("TESTTESTUnauthenticated write should fail", async()=>{
+    it("Unauthenticated write should fail", async()=>{
         var okitty = await new Okitty({
             owner: "oyamist", 
             repo: "okitty", 
@@ -103,7 +103,7 @@
         }
         should(eCaught.message).match(/Not Found/);
     });
-    it("TESTTESTcreateBlob(content) => git blob", async()=>{
+    it("createBlob(content) => git blob", async()=>{
         if (auth == null) {
             console.error("Test ignored (no personal access token)");
             return;
@@ -138,7 +138,7 @@
         should.deepEqual(res, { sha: BLOB_HELLO, url, });
         should(okitty.stats.octokitCalls).equal(octokitCalls+1);
     });
-    it("TESTTESTcreateTree", async()=>{
+    it("createTree", async()=>{
         if (auth == null) {
             console.error("Test ignored (no personal access token)");
             return;
@@ -172,7 +172,7 @@
         should.deepEqual(res.tree, [LICENSE_ENTRY, README_ENTRY]);
         should(okitty.stats.octokitCalls).equal(octokitCalls+1);
     });
-    it("TESTTESTwriteFile(...) writes file to path", async()=>{
+    it("writeFile(...) writes file to path", async()=>{
         if (auth == null) {
             console.error("Test ignored (no personal access token)");
             return;
